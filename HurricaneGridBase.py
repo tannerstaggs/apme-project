@@ -1,4 +1,5 @@
 import math
+import numpy as np
 from tropycal import tracks
 from utils.geometry import point_in_bbox
 
@@ -42,3 +43,27 @@ class HurricaneGridBase:
         lat_idx = math.floor(lat / (len(self.lon_intervals)))
         lon_idx = math.floor(lon % len(self.lon_intervals))
         return lat_idx, lon_idx
+    
+    # I think this works but I need to be convinced
+    def from_indices_to_bbox_idx(self, lat_idx, lon_idx):
+        pos = lat_idx * len(self.lon_intervals)
+        pos += lon_idx
+        return pos
+    
+    # Transition matrix is not the transition probability matrix, it just counts transitions from i to j
+    # This one is not tested yet
+    def get_occurence_i_to_j(self, i_lat_idx, i_lon_idx, j_lat_idx, j_lon_idx):
+        i_to_j_count = 0
+        i_bbox_idx = self.from_indices_to_bbox_idx(i_lat_idx, i_lon_idx)
+        j_bbox_idx = self.from_indices_to_bbox_idx(j_lat_idx, j_lon_idx)
+        for storm in self.basin.analogs_from_shape(self.bboxes[i_bbox_idx]):
+            storm_df = self.basin.get_storm(storm).to_dataframe()
+            storm_df.sort_values(by="time", inplace=True)
+            for idx, row in storm_df.iterrows():
+                next_row = storm_df.iloc[idx+1]
+                next_lat = float(next_row["lat"])
+                next_lon = float(next_row["lon"])
+                next_entry = self.get_entry_for_lat_lon(next_lat, next_lon)
+                if next_entry == j_bbox_idx:
+                    i_to_j_count += 1
+        return i_to_j_count
