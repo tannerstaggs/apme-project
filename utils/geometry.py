@@ -1,4 +1,5 @@
 from geographiclib.geodesic import Geodesic
+import numpy as np
 import shapely
 
 # bbox is a list of tuples and point is a tuple
@@ -7,9 +8,7 @@ def point_in_bbox(bbox: list, point: tuple):
     shapely_box = shapely.Polygon(bbox)
     return shapely_box.contains(pt)
 
-def getStormDirection(prev_lat, prev_lon, lat, lon):
-    
-    import numpy as np
+def get_storm_direction(prev_lat, prev_lon, lat, lon):
 
     # find differences between previous and current lats and lons
     lat_diff = lat - prev_lat
@@ -50,5 +49,4 @@ def getStormDirection(prev_lat, prev_lon, lat, lon):
             stormDir = "O"
         
     return stormDir
-        
-        
+
