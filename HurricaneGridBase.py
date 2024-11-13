@@ -1,8 +1,10 @@
 import itertools
 import math
 import numpy as np
+import pandas as pd
 from tropycal import tracks
-from utils.geometry import point_in_bbox
+from tropycal.utils import wind_to_category
+from utils.geometry import point_in_bbox, get_storm_direction
 
 class HurricaneGridBase:
     # Takes in the bounds of interest and creates a list of 1x1 lat/lon bounding boxes
@@ -15,8 +17,15 @@ class HurricaneGridBase:
         self.bbox_combos = list(itertools.product(self.lat_intervals, self.lon_intervals))
         # North, East, Other
         self.directions = ["N", "E", "O"]
+        self.categories = [i for i in range(6)]
         self.markov_entries = list(itertools.product(self.bbox_combos, self.directions))
+        self.markov_entries = list(itertools.product(self.markov_entries, self.categories))
         self.markov_chain = np.zeros((len(self.markov_entries), len(self.markov_entries)))
+
+        self.chain_indices = {}
+        self.total_values = {}
+        for idx, value in self.markov_entries:
+            self.chain_indices[value] = idx
 
         self.basin = tracks.TrackDataset(basin=basin)
 
@@ -40,6 +49,35 @@ class HurricaneGridBase:
             [lat+1, lon+1],
             [lat, lon+1]
         ]
+    
+    # This is one storm at a time
+    def get_transitions_from_dataframe(self, df: pd.DataFrame):
+        _current = []
+        _to = []
+        for idx, row in df.iterrows():
+            if idx == 0:
+                # Do nothing
+                continue
+            else:
+                if idx > 1:
+                    _to.append(_current[-1])
+                prev = df.iloc[idx-1]
+                if idx < (len(df) - 1):
+                    _current.append(self.get_type(prev, row))
+        return _current, _to
+
+    def get_type(self, prev, row):
+        prev_lat = prev["lat"]
+        prev_lon = prev["lon"]
+        lat = row["lat"]
+        lon = row["lon"]
+        direction = get_storm_direction(prev_lat, prev_lon, lat, lon)
+        category = wind_to_category(row["vmax"])
+        location = tuple((math.floor(lat), math.floor(lon)))
+        return tuple((location, direction, category))
+
+
+
     
     # Note: I think we don't need this now that we have changed the markov chain
     # Finds the entry that a lat, lon point should correspond to
