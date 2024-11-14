@@ -8,26 +8,43 @@ from utils.geometry import point_in_bbox, get_storm_direction
 
 class HurricaneGridBase:
     # Takes in the bounds of interest and creates a list of 1x1 lat/lon bounding boxes
-    def __init__(self, lat_min, lat_max, lon_min, lon_max, basin="north_atlantic"):
+    def __init__(self, lat_min, lat_max, lon_min, lon_max, basin="north_atlantic", start_year=2000):
+        self.lat_min = lat_min
+        self.lat_max = lat_max
+        self.lon_min = lon_min
+        self.lon_max = lon_max
         self.lat_offset = 0 - lat_min
         self.lon_offset = 0 - lon_min
+
+        self.major_bbox = [
+            [lat_min, lon_min],
+            [lat_max, lon_min],
+            [lat_max, lon_max],
+            [lat_min, lon_max]
+        ]
+
+        self.year_range = (start_year, 2023)
 
         self.lat_intervals = [i for i in range(lat_min, lat_max+1)]
         self.lon_intervals = [i for i in range(lon_min, lon_max+1)]
         self.bbox_combos = list(itertools.product(self.lat_intervals, self.lon_intervals))
+        self.bbox_combos.append(("OB"))
         # North, East, Other
         self.directions = ["N", "E", "O"]
         self.categories = [i for i in range(6)]
         self.markov_entries = list(itertools.product(self.bbox_combos, self.directions))
         self.markov_entries = list(itertools.product(self.markov_entries, self.categories))
-        self.markov_chain = np.zeros((len(self.markov_entries), len(self.markov_entries)))
+        self.markov_chain_counts = np.zeros((len(self.markov_entries), len(self.markov_entries)))
+        self.markov_chain_probabilities = np.zeros((len(self.markov_entries), len(self.markov_entries)))
 
         self.chain_indices = {}
-        self.total_values = {}
-        for idx, value in self.markov_entries:
+        self.total_values = {i: 0 for i in self.markov_entries}
+        for idx, value in enumerate(self.markov_entries):
             self.chain_indices[value] = idx
 
         self.basin = tracks.TrackDataset(basin=basin)
+
+        self.analogs = self.basin.analogs_from_shape(self.major_bbox, year_range=self.year_range)
 
     # Counts observations from dataset in a particular bounding box
     def observations_in_bbox(self, bbox):
@@ -59,7 +76,7 @@ class HurricaneGridBase:
                 # Do nothing
                 continue
             else:
-                if idx > 1:
+                if len(_current) > 0:
                     _to.append(_current[-1])
                 prev = df.iloc[idx-1]
                 if idx < (len(df) - 1):
@@ -69,13 +86,42 @@ class HurricaneGridBase:
     def get_type(self, prev, row):
         prev_lat = prev["lat"]
         prev_lon = prev["lon"]
-        lat = row["lat"]
-        lon = row["lon"]
+        lat = math.floor(row["lat"])
+        lon = math.floor(row["lon"])
         direction = get_storm_direction(prev_lat, prev_lon, lat, lon)
         category = wind_to_category(row["vmax"])
-        location = tuple((math.floor(lat), math.floor(lon)))
-        return tuple((location, direction, category))
+        # We are considering tropical storms and depressions to be the same category
+        if category == -1:
+            category = 0
+        if (self.lat_min <= lat and lat <= self.lat_max and self.lon_min <= lon and lon <= self.lon_max):
+            location = (lat, lon)
+        else:
+            location = ("OB")
+        return tuple(((location, direction), category))
 
+    def fill_mc(self):
+        for analog in self.analogs:
+            storm = self.basin.get_storm(analog).to_dataframe()
+            current, to = self.get_transitions_from_dataframe(storm)
+            if (len(current) != len(to)):
+                ValueError("List lengths did not match up")
+            else:
+                for i in range(len(current)):
+                    self.total_values[current[i]] += 1
+                    row_index = self.chain_indices[current[i]]
+                    col_index = self.chain_indices[to[i]]
+                    self.markov_chain_counts[row_index][col_index] += 1
+        return
+    
+    def turn_into_probabilities(self):
+        for row_entry in range(len(self.markov_entries)):
+            for column_entry in range(len(self.markov_entries)):
+                count = self.markov_chain_counts[row_entry][column_entry]
+                if count == 0:
+                    self.markov_chain_probabilities[row_entry][column_entry] = 0
+                else:
+                    self.markov_chain_probabilities[row_entry][column_entry] = count / self.total_values[self.markov_entries[row_entry]]
+        return
 
 
     
