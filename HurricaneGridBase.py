@@ -34,6 +34,7 @@ class HurricaneGridBase:
         self.categories = [i for i in range(6)]
         self.markov_entries = list(itertools.product(self.bbox_combos, self.directions))
         self.markov_entries = list(itertools.product(self.markov_entries, self.categories))
+        self.markov_entries.append("T")
         self.markov_chain_counts = np.zeros((len(self.markov_entries), len(self.markov_entries)))
         self.markov_chain_probabilities = np.zeros((len(self.markov_entries), len(self.markov_entries)))
 
@@ -69,6 +70,8 @@ class HurricaneGridBase:
     
     # This is one storm at a time
     def get_transitions_from_dataframe(self, df: pd.DataFrame):
+        df = df.loc[df["extra_obs"] == 0]
+        df = df.reset_index()
         _current = []
         _to = []
         for idx, row in df.iterrows():
@@ -76,11 +79,17 @@ class HurricaneGridBase:
                 # Do nothing
                 continue
             else:
-                if len(_current) > 0:
-                    _to.append(_current[-1])
                 prev = df.iloc[idx-1]
                 if idx < (len(df) - 1):
-                    _current.append(self.get_type(prev, row))
+                    cur = self.get_type(prev, row)
+                    if len(_current) > 0:
+                        _to.append(cur)
+                    _current.append(cur)
+                if idx == (len(df) - 1) and len(_current) > 0:
+                    _to.append(_current[-1])
+        if len(_to) > 0:
+            _current.append(_to[-1])
+            _to.append("T")
         return _current, _to
 
     def get_type(self, prev, row):
@@ -107,21 +116,37 @@ class HurricaneGridBase:
                 ValueError("List lengths did not match up")
             else:
                 for i in range(len(current)):
+                    if i != len(current) - 1:
+                        if np.isnan(current[i][1]) or np.isnan(to[i][1]):
+                            continue
+                    else:
+                        if np.isnan(current[i][1]):
+                            continue
+                    # print(f"{current[i]} to {to[i]}")
                     self.total_values[current[i]] += 1
                     row_index = self.chain_indices[current[i]]
                     col_index = self.chain_indices[to[i]]
-                    self.markov_chain_counts[row_index][col_index] += 1
+                    self.markov_chain_counts[row_index, col_index] += 1
         return
     
     def turn_into_probabilities(self):
         for row_entry in range(len(self.markov_entries)):
             for column_entry in range(len(self.markov_entries)):
-                count = self.markov_chain_counts[row_entry][column_entry]
+                count = self.markov_chain_counts[row_entry,column_entry]
                 if count == 0:
-                    self.markov_chain_probabilities[row_entry][column_entry] = 0
+                    self.markov_chain_probabilities[row_entry,column_entry] = 0
                 else:
-                    self.markov_chain_probabilities[row_entry][column_entry] = count / self.total_values[self.markov_entries[row_entry]]
+                    self.markov_chain_probabilities[row_entry,column_entry] = count / self.total_values[self.markov_entries[row_entry]]
         return
+    
+    def get_mc_probabilities(self):
+        return self.markov_chain_probabilities
+    
+    def get_state_to_idx(self):
+        return self.chain_indices
+    
+    def get_markov_entries(self):
+        return self.markov_entries
 
 
     
