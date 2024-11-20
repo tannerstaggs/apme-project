@@ -31,25 +31,27 @@ class HurricaneSim:
 
     def make_step(self, state):
         idx = self.state_to_idx[state]
-        pos, direction, category = self.parse_state(state)
+        # pos, direction, category = self.parse_state(state)
+        pos, category = self.parse_state(state)
         if pos != "OB":
             lat = pos[0]
             lon = pos[1]
         row = self.mc[idx]
-        if np.sum(row) != 1:
-            if direction == "N":
-                lat = lat + 1
-            elif direction == "E":
-                lon = lon + 1
-            else:
-                num = random.randint(0, 1)
-                if num:
-                    direction == "E"
-                else: 
-                    direction == "N"
-            state = (((lat, lon), direction), category)
-            idx = self.state_to_idx[state]
-            return idx
+        # if np.sum(row) != 1:
+        #     if direction == "N":
+        #         lat = lat + 1
+        #     elif direction == "E":
+        #         lon = lon + 1
+        #     else:
+        #         num = random.randint(0, 1)
+        #         if num:
+        #             direction == "E"
+        #         else: 
+        #             direction == "N"
+            # state = (((lat, lon), direction), category)
+            # state = ((lat, lon), category)
+            # idx = self.state_to_idx[state]
+            # return idx
         print(np.unique(row, return_counts=True))
         return monteCarloPathPredict(row)
     
@@ -80,7 +82,10 @@ class HurricaneSim:
         while state != "T" and i < max_steps:
             added_hours = (i * 6)
             time = start_time + datetime.timedelta(hours=added_hours)
-            pos, direction, category = self.parse_state(state)
+            pos, category = self.parse_state(state)
+            if pos == "OB":
+                break
+            # pos, direction, category = self.parse_state(state)
             lat, lon = pos[0] + 0.5, pos[1] + 0.5
             type = self.category_to_type[category]
             vmax = self.category_to_vmax[category]
@@ -167,9 +172,10 @@ class HurricaneSim:
         return uuid.uuid4()
     
     def parse_state(self, state):
-        _, category = state[0], state[1]
-        position, direction = _[0], _[1]
-        return position, direction, category
+        position, category = state[0], state[1]
+        return position, category
+        # position, direction = _[0], _[1]
+        # return position, direction, category
     
     def set_lead_time(self, lead_time):
         self.lead_time = lead_time
@@ -178,11 +184,12 @@ class HurricaneSim:
         self.initial_state = state
         if state == "T":
             ValueError("Cannot start with terminated state")
-        self.pos_and_direction = state[0]
-        self.init_position = self.pos_and_direction[0]
+        # self.pos_and_direction = state[0]
+        # self.init_position = self.pos_and_direction[0]
+        self.init_position = state[0]
         if self.init_position == "OB":
             ValueError("Cannot start with out of bounds storm")
-        self.init_direction = self.pos_and_direction[1]
+        # self.init_direction = self.pos_and_direction[1]
         self.init_category = state[1]
 
 
@@ -191,5 +198,5 @@ if __name__ == "__main__":
     hgb = HurricaneGridBase(15, 40, -100, -65, start_year=1930)
     hsim = HurricaneSim("sim_data", hgb, None, None)
     lead_times = [datetime.datetime(2024, 10, 6, 23), datetime.datetime(2024, 10, 7, 5)]
-    states = [(((22, -94), "E"), 1), (((22, -93), "E"), 2)]
+    states = [((22, -94), 1), ((22, -93), 2)]
     hsim.sim_lead_times(lead_times, states, num_sims=10)
