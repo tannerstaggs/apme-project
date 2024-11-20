@@ -30,10 +30,10 @@ class HurricaneGridBase:
         self.bbox_combos = list(itertools.product(self.lat_intervals, self.lon_intervals))
         self.bbox_combos.append(("OB"))
         # North, East, Other
-        # self.directions = ["N", "E", "O"]
+        self.directions = ["N", "E", "O"]
         self.categories = [i for i in range(6)]
-        # self.markov_entries = list(itertools.product(self.bbox_combos, self.directions))
-        self.markov_entries = list(itertools.product(self.bbox_combos, self.categories))
+        self.markov_entries = list(itertools.product(self.bbox_combos, self.directions))
+        # self.markov_entries = list(itertools.product(self.bbox_combos, self.categories))
         self.markov_entries.append("T")
         self.markov_chain_counts = np.zeros((len(self.markov_entries), len(self.markov_entries)))
         self.markov_chain_probabilities = np.zeros((len(self.markov_entries), len(self.markov_entries)))
@@ -97,17 +97,17 @@ class HurricaneGridBase:
         prev_lon = prev["lon"]
         lat = math.floor(row["lat"])
         lon = math.floor(row["lon"])
-        # direction = get_storm_direction(prev_lat, prev_lon, lat, lon)
-        category = wind_to_category(row["vmax"])
+        direction = get_storm_direction(prev_lat, prev_lon, lat, lon)
+        # category = wind_to_category(row["vmax"])
         # We are considering tropical storms and depressions to be the same category
-        if category == -1:
-            category = 0
+        # if category == -1:
+        #     category = 0
         if (self.lat_min <= lat and lat <= self.lat_max and self.lon_min <= lon and lon <= self.lon_max):
             location = (lat, lon)
         else:
             location = ("OB")
         # return tuple(((location, direction), category))
-        return (location, category)
+        return (location, direction)
 
     def fill_mc(self):
         for analog in self.analogs:
@@ -117,13 +117,13 @@ class HurricaneGridBase:
                 ValueError("List lengths did not match up")
             else:
                 for i in range(len(current)):
-                    if i != len(current) - 1:
-                        if np.isnan(current[i][1]) or np.isnan(to[i][1]):
-                            continue
-                    else:
-                        if np.isnan(current[i][1]):
-                            continue
-                    # print(f"{current[i]} to {to[i]}")
+                    # if i != len(current) - 1:
+                    #     if np.isnan(current[i][1]) or np.isnan(to[i][1]):
+                    #         continue
+                    # else:
+                    #     if np.isnan(current[i][1]):
+                    #         continue
+                    print(f"{current[i]} to {to[i]}")
                     self.total_values[current[i]] += 1
                     row_index = self.chain_indices[current[i]]
                     col_index = self.chain_indices[to[i]]
