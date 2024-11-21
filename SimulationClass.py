@@ -15,6 +15,7 @@ class HurricaneSim:
         self.mc = hgb.get_mc_probabilities()
         self.state_to_idx = hgb.get_state_to_idx()
         self.idx_to_state = hgb.get_markov_entries()
+        self.intensity = hgb.get_intensity_probabilities()
         self.sim = pd.DataFrame({"LeadTime": [], "SimNum": [], "TimeStep": [], "Lat": [], "Lon": [], "Direction": [], "Category": []})
         # self.initial_state = initial_state
         # if initial_state == "T":
@@ -29,31 +30,38 @@ class HurricaneSim:
         self.category_to_type = {0: "TS", 1: "H", 2: "H", 3: "H", 4: "H", 5: "H"}
         self.category_to_vmax = {-1: 33, 0: 34, 1: 64, 2: 83, 3: 96, 4: 113, 5: 137}
 
-    def make_step(self, state):
+    def make_step(self, state, category):
         idx = self.state_to_idx[state]
         # pos, direction, category = self.parse_state(state)
         pos, direction = self.parse_state(state)
+        category = monteCarloPathPredict(self.intensity[category])
         if pos != "OB":
             lat = pos[0]
             lon = pos[1]
         row = self.mc[idx]
         if np.sum(row) != 1:
-            if direction == "N":
+            # if direction == "N":
+            #     lat = lat + 1
+            # elif direction == "E":
+            #     lon = lon + 1
+            # else:
+            #     num = random.randint(0, 1)
+            #     if num:
+            #         direction == "E"
+            #     else: 
+            #         direction == "N"
+            if direction == "NE":
                 lat = lat + 1
-            elif direction == "E":
                 lon = lon + 1
             else:
-                num = random.randint(0, 1)
-                if num:
-                    direction == "E"
-                else: 
-                    direction == "N"
+                lat = lat
+                lon = lon
             # state = (((lat, lon), direction), category)
             state = ((lat, lon), direction)
             idx = self.state_to_idx[state]
-            return idx
+            return idx, category
         print(np.unique(row, return_counts=True))
-        return monteCarloPathPredict(row)
+        return monteCarloPathPredict(row), category
     
     def run_sim(self, max_steps, sim_num):
         df = pd.DataFrame({
@@ -76,6 +84,7 @@ class HurricaneSim:
         source = "hurdat"
         start_time = self.lead_time
         state = self.initial_state
+        category = self.init_category
         state_idx = self.state_to_idx[state]
         states = []
         i = 0
@@ -87,8 +96,8 @@ class HurricaneSim:
                 break
             # pos, direction, category = self.parse_state(state)
             lat, lon = pos[0] + 0.5, pos[1] + 0.5
-            # type = self.category_to_type[category]
-            # vmax = self.category_to_vmax[category]
+            type = self.category_to_type[category]
+            vmax = self.category_to_vmax[category]
             mslp = 0
             wmo_basin = "north_atlantic"
             ace = 0
@@ -99,8 +108,8 @@ class HurricaneSim:
                             "time": [time],
                             "lat": [lat],
                             "lon": [lon],
-                            # "vmax": [vmax],
-                            # "type": [type],
+                            "vmax": [vmax],
+                            "type": [type],
                             "mslp": [mslp],
                             "wmo_basin": [wmo_basin],
                             "ace": [ace],
@@ -109,7 +118,7 @@ class HurricaneSim:
                            })
             df = pd.concat([df, row], ignore_index=True)
             states.append(state)
-            state_idx = self.make_step(state)
+            state_idx, category = self.make_step(state, category)
             state = self.idx_to_state[state_idx]
             i += 1
         if state == "T":
@@ -124,8 +133,8 @@ class HurricaneSim:
                         "time": [],
                         "lat": [],
                         "lon": [],
-                        # "vmax": [],
-                        # "type": [],
+                        "vmax": [],
+                        "type": [],
                         "mslp": [],
                         "wmo_basin": [],
                         "ace": [],
@@ -137,7 +146,7 @@ class HurricaneSim:
             df = pd.concat([df, new_df], ignore_index=True)
         return df
     
-    def sim_lead_times(self, lead_times, states, num_sims):
+    def sim_lead_times(self, lead_times, states, categories, num_sims):
         df = pd.DataFrame({
                     "name": [], 
                     "id": [],
@@ -145,8 +154,8 @@ class HurricaneSim:
                     "time": [],
                     "lat": [],
                     "lon": [],
-                    # "vmax": [],
-                    # "type": [],
+                    "vmax": [],
+                    "type": [],
                     "mslp": [],
                     "wmo_basin": [],
                     "ace": [],
@@ -160,8 +169,9 @@ class HurricaneSim:
             for i in range(list_len):
                 lead_time = lead_times[i]
                 state = states[i]
+                category = categories[i]
                 self.set_lead_time(lead_time)
-                self.set_init_state(state)
+                self.set_init_state(state, category)
                 new_df = self.repeat_simulations(num_sims)
                 df = pd.concat([df, new_df], ignore_index=True)
         df.to_csv(self.data_dir+"/sims.csv")
@@ -180,7 +190,7 @@ class HurricaneSim:
     def set_lead_time(self, lead_time):
         self.lead_time = lead_time
 
-    def set_init_state(self, state):
+    def set_init_state(self, state, category):
         self.initial_state = state
         if state == "T":
             ValueError("Cannot start with terminated state")
@@ -190,13 +200,14 @@ class HurricaneSim:
         if self.init_position == "OB":
             ValueError("Cannot start with out of bounds storm")
         # self.init_direction = self.pos_and_direction[1]
-        self.init_category = state[1]
+        self.init_category = category
 
 
 
 if __name__ == "__main__":
     hgb = HurricaneGridBase(15, 40, -100, -65, start_year=1930)
     hsim = HurricaneSim("sim_data", hgb, None, None)
-    lead_times = [datetime.datetime(2024, 10, 8, 11)]
-    states = [((22, -89), "E")]
-    hsim.sim_lead_times(lead_times, states, num_sims=10)
+    lead_times = [datetime.datetime(2024, 10, 7, 5),datetime.datetime(2024, 10, 8, 11)]
+    states = [((22, -93), "NE"),((22, -89), "NE")]
+    categories = [1, 2]
+    hsim.sim_lead_times(lead_times, states, categories, num_sims=10)

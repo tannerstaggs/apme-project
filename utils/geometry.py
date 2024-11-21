@@ -21,7 +21,7 @@ def get_storm_direction(prev_lat, prev_lon, lat, lon):
         if not lat_diff == 0:
             
             if lat_diff > 0: # positive, traveling north
-                stormDir = "N"
+                stormDir = "NE"
                 
             else: # negative, traveling south
                 stormDir = "O" # south defined as other
@@ -32,7 +32,7 @@ def get_storm_direction(prev_lat, prev_lon, lat, lon):
     elif lat_diff == 0: # we can't trust that arctan will properly interpret west vs east 
         
         if lon_diff > 0: # if moved east
-            stormDir = "E"
+            stormDir = "NE"
         else: # if moved west
             stormDir = "O" 
             
@@ -42,9 +42,9 @@ def get_storm_direction(prev_lat, prev_lon, lat, lon):
             
         # define direction given storm angle
         if (stormAngle > (np.pi/4) and stormAngle <= ((3*np.pi)/4)):
-            stormDir = "N" # north defined as a pi/2 segment of the unit circle bisected by "true north"
+            stormDir = "NE" # north defined as a pi/2 segment of the unit circle bisected by "true north"
         elif (abs(stormAngle) <= (np.pi/4) and abs(stormAngle) >= 0): # absolute values bc it was getting confused by small negative angles
-            stormDir = "E" # east defined as pi/2 segment of unit circle bisected by "true east"
+            stormDir = "NE" # east defined as pi/2 segment of unit circle bisected by "true east"
         else:
             stormDir = "O"
         

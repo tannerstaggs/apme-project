@@ -30,13 +30,18 @@ class HurricaneGridBase:
         self.bbox_combos = list(itertools.product(self.lat_intervals, self.lon_intervals))
         self.bbox_combos.append(("OB"))
         # North, East, Other
-        self.directions = ["N", "E", "O"]
+        self.directions = ["NE", "O"]
         self.categories = [i for i in range(6)]
         self.markov_entries = list(itertools.product(self.bbox_combos, self.directions))
         # self.markov_entries = list(itertools.product(self.bbox_combos, self.categories))
         self.markov_entries.append("T")
         self.markov_chain_counts = np.zeros((len(self.markov_entries), len(self.markov_entries)))
         self.markov_chain_probabilities = np.zeros((len(self.markov_entries), len(self.markov_entries)))
+
+        self.intensity_counts = np.zeros((len(self.categories), len(self.categories)))
+        self.intensity_probabilities = np.zeros((len(self.categories), len(self.categories)))
+
+        self.category_obs = {i: 0 for i in self.categories}
 
         self.chain_indices = {}
         self.total_values = {i: 0 for i in self.markov_entries}
@@ -74,6 +79,8 @@ class HurricaneGridBase:
         df = df.reset_index()
         _current = []
         _to = []
+        _ccat = []
+        _ncat = []
         for idx, row in df.iterrows():
             if idx == 0:
                 # Do nothing
@@ -81,16 +88,19 @@ class HurricaneGridBase:
             else:
                 prev = df.iloc[idx-1]
                 if idx < (len(df) - 1):
-                    cur = self.get_type(prev, row)
+                    cur, ccat = self.get_type(prev, row)
                     if len(_current) > 0:
                         _to.append(cur)
+                        _ncat.append(ccat)
                     _current.append(cur)
+                    _ccat.append(ccat)
                 if idx == (len(df) - 1) and len(_current) > 0:
                     _to.append(_current[-1])
+                    _ncat.append(_ccat[-1])
         if len(_to) > 0:
             _current.append(_to[-1])
             _to.append("T")
-        return _current, _to
+        return _current, _to, _ccat, _ncat
 
     def get_type(self, prev, row):
         prev_lat = prev["lat"]
@@ -98,31 +108,30 @@ class HurricaneGridBase:
         lat = math.floor(row["lat"])
         lon = math.floor(row["lon"])
         direction = get_storm_direction(prev_lat, prev_lon, lat, lon)
-        # category = wind_to_category(row["vmax"])
-        # We are considering tropical storms and depressions to be the same category
-        # if category == -1:
-        #     category = 0
+        category = wind_to_category(row["vmax"])
+        #We are considering tropical storms and depressions to be the same category
+        if category == -1:
+            category = 0
         if (self.lat_min <= lat and lat <= self.lat_max and self.lon_min <= lon and lon <= self.lon_max):
             location = (lat, lon)
         else:
             location = ("OB")
         # return tuple(((location, direction), category))
-        return (location, direction)
+        return (location, direction), category
 
     def fill_mc(self):
         for analog in self.analogs:
             storm = self.basin.get_storm(analog).to_dataframe()
-            current, to = self.get_transitions_from_dataframe(storm)
+            current, to, ccat, ncat = self.get_transitions_from_dataframe(storm)
             if (len(current) != len(to)):
                 ValueError("List lengths did not match up")
             else:
                 for i in range(len(current)):
-                    # if i != len(current) - 1:
-                    #     if np.isnan(current[i][1]) or np.isnan(to[i][1]):
-                    #         continue
-                    # else:
-                    #     if np.isnan(current[i][1]):
-                    #         continue
+                    if (i < (len(ccat) - 1)):
+                        if np.isnan(ccat[i]) or np.isnan(ncat[i]):
+                            continue
+                        self.category_obs[ccat[i]] += 1
+                        self.intensity_counts[ccat[i], ncat[i]] += 1
                     print(f"{current[i]} to {to[i]}")
                     self.total_values[current[i]] += 1
                     row_index = self.chain_indices[current[i]]
@@ -138,6 +147,10 @@ class HurricaneGridBase:
                     self.markov_chain_probabilities[row_entry,column_entry] = 0
                 else:
                     self.markov_chain_probabilities[row_entry,column_entry] = count / self.total_values[self.markov_entries[row_entry]]
+        for i in range(len(self.categories)):
+            for j in range(len(self.categories)):
+                count = self.intensity_counts[i, j]
+                self.intensity_probabilities[i, j] = count / self.category_obs[i]
         return
     
     def get_mc_probabilities(self):
@@ -148,6 +161,9 @@ class HurricaneGridBase:
     
     def get_markov_entries(self):
         return self.markov_entries
+    
+    def get_intensity_probabilities(self):
+        return self.intensity_probabilities
 
 
     
