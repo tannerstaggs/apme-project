@@ -40,24 +40,31 @@ class HurricaneSim:
             lon = pos[1]
         row = self.mc[idx]
         if np.sum(row) != 1:
-            # if direction == "N":
+            position = (lat, lon)
+            if direction == "N":
+                lat = lat + 1
+                if lat > 40 or lat < 15:
+                    position = "OB"
+            elif direction == "E":
+                lon = lon + 1
+                if lon > -65 or lon < -100:
+                    position = "OB"
+            else:
+                num = random.randint(0, 1)
+                if num:
+                    direction == "E"
+                else: 
+                    direction == "N"
+            if position != "OB":
+                position = (lat, lon)
+            # if direction == "NE":
             #     lat = lat + 1
-            # elif direction == "E":
             #     lon = lon + 1
             # else:
-            #     num = random.randint(0, 1)
-            #     if num:
-            #         direction == "E"
-            #     else: 
-            #         direction == "N"
-            if direction == "NE":
-                lat = lat + 1
-                lon = lon + 1
-            else:
-                lat = lat
-                lon = lon
+            #     lat = lat
+            #     lon = lon
             # state = (((lat, lon), direction), category)
-            state = ((lat, lon), direction)
+            state = (position, direction)
             idx = self.state_to_idx[state]
             return idx, category
         print(np.unique(row, return_counts=True))
@@ -163,7 +170,7 @@ class HurricaneSim:
                     "sim_num": []
                     })
         list_len = len(lead_times)
-        if list_len != len(states):
+        if list_len != len(states) or list_len != len(categories):
             ValueError("List length mismatch")
         else:
             for i in range(list_len):
@@ -207,7 +214,7 @@ class HurricaneSim:
 if __name__ == "__main__":
     hgb = HurricaneGridBase(15, 40, -100, -65, start_year=1930)
     hsim = HurricaneSim("sim_data", hgb, None, None)
-    lead_times = [datetime.datetime(2024, 10, 7, 5),datetime.datetime(2024, 10, 8, 11)]
-    states = [((22, -93), "NE"),((22, -89), "NE")]
-    categories = [1, 2]
-    hsim.sim_lead_times(lead_times, states, categories, num_sims=10)
+    lead_times = [datetime.datetime(2024, 10, 7, 5),datetime.datetime(2024, 10, 8, 11), datetime.datetime(2024, 10, 9, 17)]
+    states = [((22, -93), "E"),((22, -89), "E"), ((26, -84), "E")]
+    categories = [1, 2, 3]
+    hsim.sim_lead_times(lead_times, states, categories, num_sims=1000)

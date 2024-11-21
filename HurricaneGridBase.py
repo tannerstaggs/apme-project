@@ -30,7 +30,7 @@ class HurricaneGridBase:
         self.bbox_combos = list(itertools.product(self.lat_intervals, self.lon_intervals))
         self.bbox_combos.append(("OB"))
         # North, East, Other
-        self.directions = ["NE", "O"]
+        self.directions = ["N", "E", "O"]
         self.categories = [i for i in range(6)]
         self.markov_entries = list(itertools.product(self.bbox_combos, self.directions))
         # self.markov_entries = list(itertools.product(self.bbox_combos, self.categories))
